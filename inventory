@@ -1,0 +1,9 @@
+[test_server]
+35.222.139.35 ansible_ssh_port=22
+
+[machines:children]
+test_server
+
+[machines:vars]
+ansible_ssh_private_key_user=myawesomeprojectwideuser
+ansible_ssh_private_key_file=~/gcp_keys/myawesomeprojectwideuser

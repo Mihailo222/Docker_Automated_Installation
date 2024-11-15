@@ -1,0 +1,109 @@
+---
+
+- name: Gather facts about system; just printout server's system information.
+  debug:
+   var: "{{ item.value }}"
+  with_items:
+   - value: ansible_facts['pkg_mgr']
+   - value: ansible_distribution
+   - value: ansible_os_family
+   - value: ansible_pkg_mgr
+
+- name: SYSTEM UPDATE (Debian/Ubuntu) | Updating system
+  apt:
+   update_cache: yes
+   cache_valid_time: 3600
+  when: ansible_facts['pkg_mgr'] == 'apt'
+  tags: update_system
+
+
+
+- name: PACKAGE INSTALLATION (Debian/Ubuntu) | Install ca-certificates and curl command.
+  apt:
+   name: "{{ item.value }}"
+   state: present
+  when: ansible_pkg_mgr == 'apt'
+  with_items:
+   - value: "ca-certificates"
+   - value: "curl"
+
+- name: PACKAGE INSTALLATION (Debian/Ubuntu) | Make directory for GPG keys (they are used for package verification before installing with apt).
+  file:
+   path: /etc/apt/keyrings
+   state: directory
+   mode: 0755
+   recurse: yes
+  when: ansible_pkg_mgr == 'apt'
+
+- name: PACKAGE INSTALLATION (Debian/Ubuntu) | Install Docker's apt repository GPG keys.
+  get_url:
+    url: "{{ docker_apt_repository_gpg_keys }}"
+    dest: /etc/apt/keyrings/docker.asc
+    force: yes # get_url module doesn't download file again if it exists on a server, but we want fresh software while installation process
+    validate_certs: yes # ensure SSL/TLS certs used by the server (in this case server serving GPG keys) is validated before downloading file
+  when: ansible_pkg_mgr == 'apt'
+
+- name: PACKAGE INSTALLATION (Debian/Ubuntu) | Set the right permissions to the GPG keys file.
+  file:
+    path: /etc/apt/keyrings/docker.asc
+    mode: 0644
+  when: ansible_pkg_mgr == 'apt'
+
+- name:  PACKAGE INSTALLATION (Debian/Ubuntu) | Add Docker repository to APT sources
+  lineinfile:
+    path: /etc/apt/sources.list.d/docker.list
+    line: "deb [arch={{ machine_architecture }} signed-by=/etc/apt/keyrings/docker.asc] {{ docker_apt_repository }} {{ machine_distribution_codename }} stable"
+    create: yes
+    mode: 0644
+  become: true
+  when: ansible_pkg_mgr == 'apt'
+
+- name: PACKAGE INSTALLATION (Debian/Ubuntu) | Update apt cache to load new packages from a repo you added to apt.
+  apt:
+    update_cache: true
+  when: ansible_pkg_mgr == 'apt'
+
+
+- name: PACKAGE INSTALLATION (Debian/Ubuntu) | Install Docker packages.
+  apt:
+    name: "{{ item.value }}"
+    state: present
+  when: ansible_pkg_mgr == 'apt'
+  with_items:
+    - value: "docker-ce"
+    - value: "docker-ce-cli"
+    - value: "containerd.io"
+    - value: "docker-buildx-plugin"
+    - value: "docker-compose-plugin"
+
+- name: PACKAGE INSTALLATIONS (CentOS/RHEL) | Install prerequires.
+  dnf:
+   name: dnf-plugins-core
+   state: present
+   update_cache: yes
+  when: ansible_pkg_mgr == 'dnf'
+
+- name: ADD DOCKER REPO (CentOS/RHEL) | Add Docker CE repository on CentOS/RHEL
+  command: dnf config-manager --add-repo "{{ docker_centos_repo }}"
+  become: yes
+  when: ansible_pkg_mgr == 'dnf'
+
+- name: INSTALL DOCKER PACKAGES (CentOS/RHEL) | Install Docker packages from Docker repo.
+  dnf:
+   name: "{{ item.value }}"
+   state: present
+  with_items:
+    - value: "docker-ce"
+    - value: "docker-ce-cli"
+    - value: "containerd.io"
+    - value: "docker-buildx-plugin"
+    - value: "docker-compose-plugin"
+  when: ansible_pkg_mgr == 'dnf'
+
+- name: START DOCKER (CentOS/RHEL) | Enable and start Docker service.
+  systemd:
+   name: docker
+   enabled: yes
+   state: started
+  become: yes
+  when: ansible_pkg_mgr == 'dnf'

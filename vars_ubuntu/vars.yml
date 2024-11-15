@@ -1,0 +1,6 @@
+---
+machine_architecture: amd64
+machine_distribution_codename: focal
+vm_instance_linux_distro: ubuntu
+docker_apt_repository_gpg_keys: "https://download.docker.com/linux/{{ vm_instance_linux_distro }}/gpg"
+docker_apt_repository: "https://download.docker.com/linux/{{ vm_instance_linux_distro }}"
